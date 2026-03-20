@@ -23,10 +23,9 @@ app.get("/", (req, res) => {
 // ============== MAIN WEBHOOK ==============
 app.post("/webhook", async (req, res) => {
   try {
-    console.log("📨 [" + new Date().toISOString() + "] SparkPost webhook received");
+    console.log("[" + new Date().toISOString() + "] SparkPost webhook received");
     console.log("Body:", JSON.stringify(req.body, null, 2));
 
-    // NetSuite ko forward karo
     const netsuitResponse = await axios.post(SUITELET_URL, req.body, {
       headers: {
         "Content-Type": "application/json",
