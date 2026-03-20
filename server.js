@@ -29,7 +29,7 @@ app.post("/webhook", async (req, res) => {
     const netsuitResponse = await axios.post(SUITELET_URL, req.body, {
       headers: {
         "Content-Type": "application/json",
-         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+         "User-Agent": "Mozilla/5.0"
       },
       timeout: 30000
     });
