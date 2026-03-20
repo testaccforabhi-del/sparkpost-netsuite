@@ -30,7 +30,7 @@ app.post("/webhook", async (req, res) => {
     const netsuitResponse = await axios.post(SUITELET_URL, req.body, {
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": "SparkPost-Webhook-Proxy/1.0"
+         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       },
       timeout: 30000
     });
@@ -45,7 +45,7 @@ app.post("/webhook", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ [" + new Date().toISOString() + "] Error occurred");
+    console.error("[" + new Date().toISOString() + "] Error occurred");
     console.error("Error message:", error.message);
 
     res.status(500).json({
@@ -71,11 +71,4 @@ app.use((req, res) => {
     error: "Route not found",
     availableRoutes: ["GET /", "POST /webhook", "POST /test"]
   });
-});
-
-// ============== START SERVER ==============
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`App URL: https://YOUR-APP-NAME.onrender.com`);
 });
