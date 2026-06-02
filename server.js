@@ -26,32 +26,88 @@ app.post("/webhook", async (req, res) => {
     console.log("[" + new Date().toISOString() + "] SparkPost webhook received");
     console.log("Body:", JSON.stringify(req.body, null, 2));
 
-    const netsuitResponse = await axios.post(SUITELET_URL, req.body, {
-      headers: {
-        "Content-Type": "application/json",
-         "User-Agent": "Mozilla/5.0"
-      },
-      timeout: 30000
-    });
+    const messages = req.body;
+    const results  = [];
 
-    console.log("[" + new Date().toISOString() + "] NetSuite response received");
-    console.log("Status:", netsuitResponse.status);
+    for (const message of messages) {
+      const relay   = message.msys.relay_message;
+      const content = relay.content;
 
-    res.status(200).json({
-      success: true,
-      message: "Webhook successfully forwarded to NetSuite",
-      netsuitStatus: netsuitResponse.status
-    });
+      // 1. Get raw MIME email
+      let rawEmail    = content.email_rfc822;
+      let subject     = content.subject;
+      let bodyText    = content.text;
+      let bodyHtml    = content.html;
+      let attachments = [];
 
-  } catch (error) {
-    console.error("[" + new Date().toISOString() + "] Error occurred");
-    console.error("Error message:", error.message);
+      console.log("email_rfc822 exists:", !!rawEmail);
+      console.log("email_rfc822_is_base64:", content.email_rfc822_is_base64);
 
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
+      // 2. Parse MIME if available (needed for attachments)
+      if (rawEmail) {
+        if (content.email_rfc822_is_base64) {
+          rawEmail = Buffer.from(rawEmail, 'base64').toString('utf8');
+        }
+
+        const { simpleParser } = require('mailparser');
+        const parsed = await simpleParser(rawEmail);
+
+        subject     = parsed.subject  || subject;
+        bodyText    = parsed.text     || bodyText;
+        bodyHtml    = parsed.html     || bodyHtml;
+        attachments = (parsed.attachments || []).map(att => ({
+          name:     att.filename,
+          mimeType: att.contentType,
+          data:     att.content.toString('base64')
+        }));
+
+        console.log("Attachments found:", attachments.length);
+        attachments.forEach(a => console.log(" -", a.name, a.mimeType));
+
+      } else {
+        console.log("No email_rfc822 — skipping MIME parse, no attachments");
+      }
+
+      // 3. Extract Quote ID from rcpt_to
+      const rcptTo  = relay.rcpt_to; // quote+12345@reply.muppuris.com
+      const quoteId = rcptTo.split('+')[1]?.split('@')[0];
+
+      // 4. Build structured payload for NetSuite
+      const netsuitePayload = {
+        quoteId,
+        subject,
+        bodyText,
+        bodyHtml,
+        fromEmail:   relay.friendly_from,
+        rcptTo:      relay.rcpt_to,
+        attachments
+      };
+
+      console.log("Sending to NetSuite:", JSON.stringify({
+        quoteId,
+        subject,
+        fromEmail:       relay.friendly_from,
+        attachmentCount: attachments.length
+      }));
+
+      // 5. POST to NetSuite Suitelet
+      const netsuiteResponse = await axios.post(SUITELET_URL, netsuitePayload, {
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent":   "Mozilla/5.0"
+        },
+        timeout: 30000
+      });
+
+      console.log("NetSuite response:", netsuiteResponse.status, netsuiteResponse.data);
+      results.push({ quoteId, status: 'sent', attachments: attachments.length });
+    }
+
+    res.status(200).json({ success: true, results });
+
+  } catch (err) {
+    console.error("Webhook error:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
